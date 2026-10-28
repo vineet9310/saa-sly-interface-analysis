@@ -1,0 +1,9 @@
+{
+  "name": "saasly-workspace",
+  "version": "1.0.0",
+  "private": true,
+  "scripts": {
+    "server": "npm --prefix Server run dev",
+    "frontend": "npm --prefix Frontend run dev"
+  }
+}
