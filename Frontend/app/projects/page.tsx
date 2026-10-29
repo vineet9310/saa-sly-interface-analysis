@@ -58,18 +58,31 @@ export default function ProjectsPage() {
     setActionMenuOpen(null)
   }
 
-  const handleSaveProject = (data: Partial<Project>) => {
-    if (editingProject) {
-      updateProject(editingProject.id, data)
-    } else {
-      createProject(data)
+  const [errorBanner, setErrorBanner] = useState('')
+
+  const handleSaveProject = async (data: Partial<Project>) => {
+    setErrorBanner('')
+    try {
+      if (editingProject) {
+        await updateProject(editingProject.id, data)
+      } else {
+        await createProject(data)
+      }
+      setModalOpen(false)
+    } catch (err: any) {
+      setErrorBanner(err?.message || 'Failed to save project.')
     }
   }
 
-  const handleConfirmDelete = () => {
+  const handleConfirmDelete = async () => {
     if (projectToDelete) {
-      deleteProject(projectToDelete.id)
-      setProjectToDelete(null)
+      setErrorBanner('')
+      try {
+        await deleteProject(projectToDelete.id)
+        setProjectToDelete(null)
+      } catch (err: any) {
+        setErrorBanner(err?.message || 'Failed to delete project.')
+      }
     }
   }
 
@@ -91,6 +104,12 @@ export default function ProjectsPage() {
           <Plus size={15} /> New Project
         </button>
       </div>
+
+      {errorBanner && (
+        <div className="mb-4 p-3 bg-red-50 text-red-600 text-xs rounded-lg border border-red-200">
+          {errorBanner}
+        </div>
+      )}
 
       {/* Filter Tabs and Search Bar */}
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-4">
@@ -145,84 +164,100 @@ export default function ProjectsPage() {
                 </td>
               </tr>
             ) : (
-              filteredProjects.map((p) => (
-                <tr key={p.id}>
-                  <td className="table-td">
-                    <div className="flex items-center gap-2.5">
-                      <div className="w-7 h-7 rounded-md bg-blue-50 text-blue-600 grid place-items-center flex-shrink-0">
-                        <FolderKanban size={14} />
-                      </div>
-                      <div>
-                        <strong className="block text-xs font-semibold text-slate-800">
-                          {p.name}
-                        </strong>
-                        {p.description && (
-                          <span className="block text-[10px] text-slate-400 truncate max-w-xs">
-                            {p.description}
-                          </span>
-                        )}
-                      </div>
-                    </div>
-                  </td>
-
-                  <td className="table-td">
-                    <div className="avatar-group">
-                      {p.team.map((m, idx) => (
-                        <div key={idx} className="avatar-group-item" title={m.name}>
-                          {m.name.charAt(0)}
+              filteredProjects.map((p, idx) => {
+                const isNearBottom = idx >= Math.max(0, filteredProjects.length - 2)
+                return (
+                  <tr key={p.id}>
+                    <td className="table-td">
+                      <div className="flex items-center gap-2.5">
+                        <div className="w-7 h-7 rounded-md bg-blue-50 text-blue-600 grid place-items-center flex-shrink-0">
+                          <FolderKanban size={14} />
                         </div>
-                      ))}
-                    </div>
-                  </td>
-
-                  <td className="table-td">
-                    <div className="progress-wrap">
-                      <div className="progress-bg">
-                        <div
-                          className="progress-fill"
-                          style={{ width: `${p.progress}%` }}
-                        />
+                        <div>
+                          <strong className="block text-xs font-semibold text-slate-800">
+                            {p.name}
+                          </strong>
+                          {p.description && (
+                            <span className="block text-[10px] text-slate-400 truncate max-w-xs">
+                              {p.description}
+                            </span>
+                          )}
+                        </div>
                       </div>
-                      <span className="progress-val">{p.progress}%</span>
-                    </div>
-                  </td>
+                    </td>
 
-                  <td className="table-td">
-                    <StatusBadge status={p.status} />
-                  </td>
-
-                  <td className="table-td text-xs text-slate-500">{p.dueDate}</td>
-
-                  <td className="table-td text-right relative">
-                    <button
-                      className="p-1 text-slate-400 hover:text-slate-600 rounded cursor-pointer"
-                      onClick={() =>
-                        setActionMenuOpen(actionMenuOpen === p.id ? null : p.id)
-                      }
-                      aria-label="Actions menu"
-                    >
-                      <MoreHorizontal size={15} />
-                    </button>
-
-                    {actionMenuOpen === p.id && (
-                      <div className="absolute right-4 top-8 bg-white border border-slate-200 rounded-lg shadow-lg py-1 z-20 w-28 text-left">
-                        <button
-                          onClick={() => handleOpenEdit(p)}
-                          className="w-full px-3 py-1.5 text-xs text-slate-700 hover:bg-slate-50 flex items-center gap-2"
-                        >
-                          <Edit size={12} /> Edit
-                        </button>
-                        <button
-                          onClick={() => handleOpenDelete(p)}
-                          className="w-full px-3 py-1.5 text-xs text-red-600 hover:bg-red-50 flex items-center gap-2"
-                        >
-                          <Trash2 size={12} /> Delete
-                        </button>
+                    <td className="table-td">
+                      <div className="avatar-group">
+                        {p.team.map((m, tIdx) => (
+                          <div key={tIdx} className="avatar-group-item" title={m.name}>
+                            {m.name.charAt(0)}
+                          </div>
+                        ))}
                       </div>
-                    )}
-                  </td>
-                </tr>
-              ))
+                    </td>
+
+                    <td className="table-td">
+                      <div className="progress-wrap">
+                        <div className="progress-bg">
+                          <div
+                            className="progress-fill"
+                            style={{ width: `${p.progress}%` }}
+                          />
+                        </div>
+                        <span className="progress-val">{p.progress}%</span>
+                      </div>
+                    </td>
+
+                    <td className="table-td">
+                      <StatusBadge status={p.status} />
+                    </td>
+
+                    <td className="table-td text-xs text-slate-500">{p.dueDate}</td>
+
+                    <td className="table-td text-right relative">
+                      <button
+                        className="p-1 text-slate-400 hover:text-slate-600 rounded cursor-pointer"
+                        onClick={() =>
+                          setActionMenuOpen(actionMenuOpen === p.id ? null : p.id)
+                        }
+                        aria-label="Actions menu"
+                      >
+                        <MoreHorizontal size={15} />
+                      </button>
+
+                      {actionMenuOpen === p.id && (
+                        <>
+                          <div
+                            className="fixed inset-0 z-20 cursor-default"
+                            onClick={(e) => {
+                              e.stopPropagation()
+                              setActionMenuOpen(null)
+                            }}
+                          />
+                          <div
+                            className={`absolute right-4 ${
+                              isNearBottom ? 'bottom-8' : 'top-8'
+                            } bg-white border border-slate-200 rounded-lg shadow-xl py-1 z-30 w-28 text-left`}
+                          >
+                            <button
+                              onClick={() => handleOpenEdit(p)}
+                              className="w-full px-3 py-1.5 text-xs text-slate-700 hover:bg-slate-50 flex items-center gap-2 cursor-pointer"
+                            >
+                              <Edit size={12} /> Edit
+                            </button>
+                            <button
+                              onClick={() => handleOpenDelete(p)}
+                              className="w-full px-3 py-1.5 text-xs text-red-600 hover:bg-red-50 flex items-center gap-2 cursor-pointer"
+                            >
+                              <Trash2 size={12} /> Delete
+                            </button>
+                          </div>
+                        </>
+                      )}
+                    </td>
+                  </tr>
+                )
+              })
             )}
           </tbody>
         </table>

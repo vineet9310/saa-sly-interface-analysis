@@ -2,8 +2,20 @@ const mongoose = require('mongoose')
 
 const projectSchema = new mongoose.Schema(
   {
-    name: { type: String, required: true },
-    description: { type: String, default: '' },
+    workspaceId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'Workspace',
+      required: true,
+      index: true,
+    },
+    userId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'User',
+      required: true,
+      index: true,
+    },
+    name: { type: String, required: true, trim: true },
+    description: { type: String, default: '', trim: true },
     team: [
       {
         id: { type: String },
@@ -20,9 +32,10 @@ const projectSchema = new mongoose.Schema(
     dueDate: { type: String, default: 'May 30, 2024' },
     budget: { type: String, default: '$15,000' },
     category: { type: String, default: 'General' },
-    userId: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
   },
   { timestamps: true }
 )
+
+projectSchema.index({ workspaceId: 1, createdAt: -1 })
 
 module.exports = mongoose.models.Project || mongoose.model('Project', projectSchema)

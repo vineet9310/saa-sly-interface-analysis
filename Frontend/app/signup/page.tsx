@@ -17,6 +17,7 @@ export default function SignUpPage() {
   const [showPassword, setShowPassword] = useState(false)
   const [agreed, setAgreed] = useState(false)
   const [error, setError] = useState('')
+  const [oauthNotice, setOauthNotice] = useState('')
   const [submitting, setSubmitting] = useState(false)
 
   // Password strength calculation
@@ -28,6 +29,10 @@ export default function SignUpPage() {
   }
 
   const strength = getPasswordStrength()
+
+  const handleSocialClick = (provider: string) => {
+    setOauthNotice(`${provider} OAuth registration requires active provider credentials. Please use the form below to create your account.`)
+  }
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -54,6 +59,7 @@ export default function SignUpPage() {
 
     setSubmitting(true)
     setError('')
+    setOauthNotice('')
 
     try {
       await register(name.trim(), email.trim(), password)
@@ -86,10 +92,7 @@ export default function SignUpPage() {
           <div className="space-y-2.5 mb-5">
             <button
               type="button"
-              onClick={() => {
-                setName('Alex Carter')
-                setEmail('alex@example.com')
-              }}
+              onClick={() => handleSocialClick('Google')}
               className="oauth-btn"
             >
               <svg className="w-4 h-4" viewBox="0 0 24 24">
@@ -115,10 +118,7 @@ export default function SignUpPage() {
 
             <button
               type="button"
-              onClick={() => {
-                setName('Alex Carter')
-                setEmail('alex@example.com')
-              }}
+              onClick={() => handleSocialClick('GitHub')}
               className="oauth-btn"
             >
               <svg className="w-4 h-4 fill-current" viewBox="0 0 24 24">
@@ -127,6 +127,12 @@ export default function SignUpPage() {
               <span>Continue with GitHub</span>
             </button>
           </div>
+
+          {oauthNotice && (
+            <div className="mb-4 p-2.5 bg-amber-50 text-amber-800 rounded-lg text-xs border border-amber-200">
+              {oauthNotice}
+            </div>
+          )}
 
           <div className="divider-or">
             <span />

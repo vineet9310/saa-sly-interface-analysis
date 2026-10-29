@@ -1,9 +1,10 @@
 'use client'
 
-import React, { useState } from 'react'
+import React, { useState, useEffect } from 'react'
 import { ChevronDown } from 'lucide-react'
+import { api } from '@/lib/api'
 
-const chartDataSets = {
+const defaultChartDataSets = {
   monthly: [
     { label: 'Jan', value: 4200, pointsY: 110 },
     { label: 'Feb', value: 6800, pointsY: 98 },
@@ -37,6 +38,7 @@ const chartDataSets = {
 export function RevenueChart() {
   const [period, setPeriod] = useState<'monthly' | 'quarterly' | 'halfYear'>('monthly')
   const [dropdownOpen, setDropdownOpen] = useState(false)
+  const [chartDataSets, setChartDataSets] = useState(defaultChartDataSets)
   const [hoveredPoint, setHoveredPoint] = useState<{
     label: string
     value: number
@@ -48,6 +50,39 @@ export function RevenueChart() {
     x: 45,
     y: 64,
   })
+
+  useEffect(() => {
+    async function fetchRevenue() {
+      try {
+        const raw = await api.analytics.getMonthlyRevenue()
+        if (raw && raw.length === 12) {
+          const maxVal = Math.max(...raw.map((d) => d.revenue)) || 25000
+          const minVal = Math.min(...raw.map((d) => d.revenue)) || 2000
+          const range = maxVal - minVal || 1
+
+          const monthly = raw.map((d) => ({
+            label: d.name,
+            value: d.revenue,
+            pointsY: Math.round(110 - ((d.revenue - minVal) / range) * 98),
+          }))
+
+          const quarterly = [
+            { label: 'Q1', value: raw.slice(0, 3).reduce((a, b) => a + b.revenue, 0), pointsY: 90 },
+            { label: 'Q2', value: raw.slice(3, 6).reduce((a, b) => a + b.revenue, 0), pointsY: 65 },
+            { label: 'Q3', value: raw.slice(6, 9).reduce((a, b) => a + b.revenue, 0), pointsY: 40 },
+            { label: 'Q4', value: raw.slice(9, 12).reduce((a, b) => a + b.revenue, 0), pointsY: 15 },
+          ]
+
+          const halfYear = monthly.slice(6)
+
+          setChartDataSets({ monthly, quarterly, halfYear })
+        }
+      } catch (err) {
+        // fallback retained
+      }
+    }
+    fetchRevenue()
+  }, [])
 
   const data = chartDataSets[period]
 

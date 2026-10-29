@@ -8,13 +8,14 @@ import { useAuth } from '@/context/AuthContext'
 
 export default function LoginPage() {
   const router = useRouter()
-  const { login, isLoading } = useAuth()
+  const { login, demoLogin, isLoading } = useAuth()
 
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [showPassword, setShowPassword] = useState(false)
   const [rememberMe, setRememberMe] = useState(true)
   const [error, setError] = useState('')
+  const [oauthNotice, setOauthNotice] = useState('')
   const [submitting, setSubmitting] = useState(false)
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -26,9 +27,10 @@ export default function LoginPage() {
 
     setSubmitting(true)
     setError('')
+    setOauthNotice('')
 
     try {
-      await login(email, password)
+      await login(email.trim(), password)
       router.push('/dashboard')
     } catch (err: any) {
       setError(err?.message || 'Login failed. Please check your credentials.')
@@ -42,14 +44,19 @@ export default function LoginPage() {
     setPassword('demo123456')
     setSubmitting(true)
     setError('')
+    setOauthNotice('')
     try {
-      await login('alex@example.com', 'demo123456')
+      await demoLogin()
       router.push('/dashboard')
-    } catch (err) {
-      router.push('/dashboard')
+    } catch (err: any) {
+      setError(err?.message || 'Demo login failed.')
     } finally {
       setSubmitting(false)
     }
+  }
+
+  const handleSocialClick = (provider: string) => {
+    setOauthNotice(`${provider} OAuth requires client ID and callback configuration. Use demo login or email/password below.`)
   }
 
   return (
@@ -73,7 +80,7 @@ export default function LoginPage() {
           <div className="space-y-2.5 mb-5">
             <button
               type="button"
-              onClick={handleDemoLogin}
+              onClick={() => handleSocialClick('Google')}
               className="oauth-btn"
             >
               <svg className="w-4 h-4" viewBox="0 0 24 24">
@@ -99,7 +106,7 @@ export default function LoginPage() {
 
             <button
               type="button"
-              onClick={handleDemoLogin}
+              onClick={() => handleSocialClick('GitHub')}
               className="oauth-btn"
             >
               <svg className="w-4 h-4 fill-current" viewBox="0 0 24 24">
@@ -108,6 +115,12 @@ export default function LoginPage() {
               <span>Continue with GitHub</span>
             </button>
           </div>
+
+          {oauthNotice && (
+            <div className="mb-4 p-2.5 bg-amber-50 text-amber-800 rounded-lg text-xs border border-amber-200">
+              {oauthNotice}
+            </div>
+          )}
 
           <div className="divider-or">
             <span />

@@ -31,8 +31,16 @@ export default function TeamPage() {
     return true
   })
 
-  const handleInvite = (data: { name: string; email: string; role: UserRole }) => {
-    inviteMember(data)
+  const [errorBanner, setErrorBanner] = useState('')
+
+  const handleInvite = async (data: { name: string; email: string; role: UserRole }) => {
+    setErrorBanner('')
+    try {
+      await inviteMember(data)
+      setInviteModalOpen(false)
+    } catch (err: any) {
+      setErrorBanner(err?.message || 'Failed to invite team member.')
+    }
   }
 
   const handleOpenRemove = (member: TeamMember) => {
@@ -41,16 +49,26 @@ export default function TeamPage() {
     setActionMenuOpen(null)
   }
 
-  const handleConfirmRemove = () => {
+  const handleConfirmRemove = async () => {
     if (memberToRemove) {
-      removeMember(memberToRemove.id)
-      setMemberToRemove(null)
+      setErrorBanner('')
+      try {
+        await removeMember(memberToRemove.id)
+        setMemberToRemove(null)
+      } catch (err: any) {
+        setErrorBanner(err?.message || 'Failed to remove team member.')
+      }
     }
   }
 
-  const handleChangeRole = (memberId: string, role: UserRole) => {
-    updateMemberRole(memberId, role)
-    setActionMenuOpen(null)
+  const handleChangeRole = async (memberId: string, role: UserRole) => {
+    setErrorBanner('')
+    try {
+      await updateMemberRole(memberId, role)
+      setActionMenuOpen(null)
+    } catch (err: any) {
+      setErrorBanner(err?.message || 'Failed to update member role.')
+    }
   }
 
   return (
@@ -71,6 +89,12 @@ export default function TeamPage() {
           <Plus size={15} /> Invite Member
         </button>
       </div>
+
+      {errorBanner && (
+        <div className="mb-4 p-3 bg-red-50 text-red-600 text-xs rounded-lg border border-red-200">
+          {errorBanner}
+        </div>
+      )}
 
       {/* Filter and Search Bar */}
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-4">
@@ -124,91 +148,107 @@ export default function TeamPage() {
                 </td>
               </tr>
             ) : (
-              filteredMembers.map((m) => (
-                <tr key={m.id}>
-                  <td className="table-td">
-                    <div className="flex items-center gap-3">
-                      <div className="w-9 h-9 rounded-full bg-slate-200 overflow-hidden flex-shrink-0">
-                        {m.avatar ? (
-                          <img
-                            src={m.avatar}
-                            alt={m.name}
-                            className="w-full h-full object-cover"
-                          />
-                        ) : (
-                          <div className="w-full h-full grid place-items-center font-bold text-slate-600 text-xs">
-                            {m.name.charAt(0)}
-                          </div>
-                        )}
+              filteredMembers.map((m, idx) => {
+                const isNearBottom = idx >= Math.max(0, filteredMembers.length - 2)
+                return (
+                  <tr key={m.id}>
+                    <td className="table-td">
+                      <div className="flex items-center gap-3">
+                        <div className="w-9 h-9 rounded-full bg-slate-200 overflow-hidden flex-shrink-0">
+                          {m.avatar ? (
+                            <img
+                              src={m.avatar}
+                              alt={m.name}
+                              className="w-full h-full object-cover"
+                            />
+                          ) : (
+                            <div className="w-full h-full grid place-items-center font-bold text-slate-600 text-xs">
+                              {m.name.charAt(0)}
+                            </div>
+                          )}
+                        </div>
+                        <div>
+                          <strong className="block text-xs font-semibold text-slate-900">
+                            {m.name}
+                          </strong>
+                          <span className="block text-[11px] text-slate-400">
+                            {m.email}
+                          </span>
+                        </div>
                       </div>
-                      <div>
-                        <strong className="block text-xs font-semibold text-slate-900">
-                          {m.name}
-                        </strong>
-                        <span className="block text-[11px] text-slate-400">
-                          {m.email}
-                        </span>
-                      </div>
-                    </div>
-                  </td>
+                    </td>
 
-                  <td className="table-td">
-                    <StatusBadge status={m.role} type="role" />
-                  </td>
+                    <td className="table-td">
+                      <StatusBadge status={m.role} type="role" />
+                    </td>
 
-                  <td className="table-td">
-                    <span className="inline-flex items-center gap-1.5 text-xs text-slate-600 font-medium">
-                      <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
-                      {m.status}
-                    </span>
-                  </td>
+                    <td className="table-td">
+                      <span className="inline-flex items-center gap-1.5 text-xs text-slate-600 font-medium">
+                        <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
+                        {m.status}
+                      </span>
+                    </td>
 
-                  <td className="table-td text-xs text-slate-500">
-                    {m.joinedAt || 'Jan 2024'}
-                  </td>
+                    <td className="table-td text-xs text-slate-500">
+                      {m.joinedAt || 'Jan 2024'}
+                    </td>
 
-                  <td className="table-td text-right relative">
-                    {m.role !== 'Owner' ? (
-                      <>
-                        <button
-                          className="p-1 text-slate-400 hover:text-slate-600 rounded cursor-pointer"
-                          onClick={() =>
-                            setActionMenuOpen(actionMenuOpen === m.id ? null : m.id)
-                          }
-                          aria-label="Member options"
-                        >
-                          <MoreHorizontal size={15} />
-                        </button>
+                    <td className="table-td text-right relative">
+                      {m.role !== 'Owner' ? (
+                        <>
+                          <button
+                            className="p-1 text-slate-400 hover:text-slate-600 rounded cursor-pointer"
+                            onClick={() =>
+                              setActionMenuOpen(actionMenuOpen === m.id ? null : m.id)
+                            }
+                            aria-label="Member options"
+                          >
+                            <MoreHorizontal size={15} />
+                          </button>
 
-                        {actionMenuOpen === m.id && (
-                          <div className="absolute right-4 top-8 bg-white border border-slate-200 rounded-lg shadow-lg py-1 z-20 w-36 text-left">
-                            <button
-                              onClick={() =>
-                                handleChangeRole(
-                                  m.id,
-                                  m.role === 'Admin' ? 'Member' : 'Admin'
-                                )
-                              }
-                              className="w-full px-3 py-1.5 text-xs text-slate-700 hover:bg-slate-50 flex items-center gap-2"
-                            >
-                              <Shield size={12} />
-                              Make {m.role === 'Admin' ? 'Member' : 'Admin'}
-                            </button>
-                            <button
-                              onClick={() => handleOpenRemove(m)}
-                              className="w-full px-3 py-1.5 text-xs text-red-600 hover:bg-red-50 flex items-center gap-2"
-                            >
-                              <UserMinus size={12} /> Remove Member
-                            </button>
-                          </div>
-                        )}
-                      </>
-                    ) : (
-                      <span className="text-[11px] text-slate-400 italic">Workspace Owner</span>
-                    )}
-                  </td>
-                </tr>
-              ))
+                          {actionMenuOpen === m.id && (
+                            <>
+                              <div
+                                className="fixed inset-0 z-20 cursor-default"
+                                onClick={(e) => {
+                                  e.stopPropagation()
+                                  setActionMenuOpen(null)
+                                }}
+                              />
+                              <div
+                                className={`absolute right-4 ${
+                                  isNearBottom ? 'bottom-8' : 'top-8'
+                                } bg-white border border-slate-200 rounded-lg shadow-xl py-1 z-30 w-36 text-left`}
+                              >
+                                <button
+                                  onClick={() =>
+                                    handleChangeRole(
+                                      m.id,
+                                      m.role === 'Admin' ? 'Member' : 'Admin'
+                                    )
+                                  }
+                                  className="w-full px-3 py-1.5 text-xs text-slate-700 hover:bg-slate-50 flex items-center gap-2 cursor-pointer"
+                                >
+                                  <Shield size={12} />
+                                  Make {m.role === 'Admin' ? 'Member' : 'Admin'}
+                                </button>
+                                <button
+                                  onClick={() => handleOpenRemove(m)}
+                                  className="w-full px-3 py-1.5 text-xs text-red-600 hover:bg-red-50 flex items-center gap-2 cursor-pointer"
+                                >
+                                  <UserMinus size={12} /> Remove Member
+                                </button>
+                              </div>
+                            </>
+                          )}
+                        </>
+                      ) : (
+                        <span className="text-[11px] text-slate-400 italic">Workspace Owner</span>
+                      )}
+                    </td>
+                  </tr>
+                )
+              })
             )}
           </tbody>
         </table>

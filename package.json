@@ -3,7 +3,9 @@
   "version": "1.0.0",
   "private": true,
   "scripts": {
-    "server": "npm --prefix Server run dev",
-    "frontend": "npm --prefix Frontend run dev"
+    "server": "npm --prefix server run dev",
+    "frontend": "npm --prefix Frontend run dev",
+    "build": "npm --prefix Frontend run build",
+    "test": "npm --prefix server test"
   }
 }

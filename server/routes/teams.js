@@ -1,156 +1,208 @@
 const express = require('express')
 const router = express.Router()
+const mongoose = require('mongoose')
+const {
+  authenticateToken,
+  requireWorkspace,
+  requireRole,
+} = require('../middleware/auth')
 const TeamMember = require('../models/TeamMember')
+const Workspace = require('../models/Workspace')
 
-let memoryMembers = [
-  {
-    id: 'tm_1',
-    name: 'Alex Carter',
-    email: 'alex@example.com',
-    role: 'Owner',
-    avatar: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=120&h=120&q=80',
-    status: 'Active',
-    joinedAt: 'Jan 2023',
-  },
-  {
-    id: 'tm_2',
-    name: 'Sarah Khan',
-    email: 'sarah@example.com',
-    role: 'Admin',
-    avatar: 'https://images.unsplash.com/photo-1494790108377-be9c29b29330?auto=format&fit=crop&w=120&h=120&q=80',
-    status: 'Active',
-    joinedAt: 'Mar 2023',
-  },
-  {
-    id: 'tm_3',
-    name: 'Mike Johnson',
-    email: 'mike@example.com',
-    role: 'Member',
-    avatar: 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?auto=format&fit=crop&w=120&h=120&q=80',
-    status: 'Active',
-    joinedAt: 'Jul 2023',
-  },
-  {
-    id: 'tm_4',
-    name: 'Emily Davis',
-    email: 'emily@example.com',
-    role: 'Member',
-    avatar: 'https://images.unsplash.com/photo-1438761681033-6461ffad8d80?auto=format&fit=crop&w=120&h=120&q=80',
-    status: 'Active',
-    joinedAt: 'Nov 2023',
-  },
-  {
-    id: 'tm_5',
-    name: 'David Wilson',
-    email: 'david@example.com',
-    role: 'Member',
-    avatar: 'https://images.unsplash.com/photo-1500648767791-00dcc994a43e?auto=format&fit=crop&w=120&h=120&q=80',
-    status: 'Active',
-    joinedAt: 'Feb 2024',
-  },
-]
+const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
 
-// GET all team members
+// Apply authentication and workspace isolation
+router.use(authenticateToken)
+router.use(requireWorkspace)
+
+// GET /api/teams — List members for workspace
 router.get('/', async (req, res) => {
   try {
-    try {
-      const dbMembers = await TeamMember.find().sort({ createdAt: 1 })
-      if (dbMembers && dbMembers.length > 0) {
-        return res.json({
-          members: dbMembers.map((m) => ({
-            id: m._id.toString(),
-            name: m.name,
-            email: m.email,
-            role: m.role,
-            avatar: m.avatar,
-            status: m.status,
-            joinedAt: m.joinedAt,
-          })),
-        })
-      }
-    } catch (e) {}
+    const dbMembers = await TeamMember.find({ workspaceId: req.workspaceId }).sort({
+      createdAt: 1,
+    })
 
-    res.json({ members: memoryMembers })
+    const members = dbMembers.map((m) => ({
+      id: m._id.toString(),
+      name: m.name,
+      email: m.email,
+      role: m.role,
+      avatar:
+        m.avatar ||
+        'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=120&h=120&q=80',
+      status: m.status,
+      joinedAt: m.joinedAt,
+    }))
+
+    res.json({ members })
   } catch (err) {
-    res.status(500).json({ message: 'Error retrieving team members' })
+    console.error('Error fetching team members:', err)
+    res.status(500).json({ message: 'Error retrieving team members.' })
   }
 })
 
-// POST invite member
-router.post('/invite', async (req, res) => {
+// POST /api/teams/invite — Invite a new member
+router.post('/invite', requireRole(['Owner', 'Admin']), async (req, res) => {
   try {
     const { name, email, role } = req.body
-    if (!name || !email) {
-      return res.status(400).json({ message: 'Name and email are required.' })
+
+    if (!name || typeof name !== 'string' || !name.trim()) {
+      return res.status(400).json({ message: 'Name is required.' })
+    }
+    if (!email || typeof email !== 'string' || !email.trim()) {
+      return res.status(400).json({ message: 'Email is required.' })
     }
 
-    let created = null
-    try {
-      const m = await TeamMember.create({
-        name,
-        email: email.toLowerCase(),
-        role: role || 'Member',
-        status: 'Active',
-        joinedAt: 'Just now',
-      })
-      created = {
-        id: m._id.toString(),
-        name: m.name,
-        email: m.email,
-        role: m.role,
-        avatar: m.avatar,
-        status: m.status,
-        joinedAt: m.joinedAt,
-      }
-    } catch (e) {
-      created = {
-        id: `tm_${Date.now()}`,
-        name,
-        email: email.toLowerCase(),
-        role: role || 'Member',
-        avatar:
-          'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=120&h=120&q=80',
-        status: 'Active',
-        joinedAt: 'Just now',
-      }
-      memoryMembers.push(created)
+    const normalizedEmail = email.trim().toLowerCase()
+    if (!EMAIL_REGEX.test(normalizedEmail)) {
+      return res.status(400).json({ message: 'Please provide a valid email address.' })
     }
 
-    res.status(201).json({ member: created })
+    const allowedRoles = ['Owner', 'Admin', 'Member', 'Viewer']
+    const assignedRole = allowedRoles.includes(role) ? role : 'Member'
+
+    // Only Owner can invite someone directly as Owner
+    if (assignedRole === 'Owner' && req.userRole !== 'Owner') {
+      return res.status(403).json({ message: 'Only workspace owners can assign Owner role.' })
+    }
+
+    // Check duplicate in workspace
+    const existing = await TeamMember.findOne({
+      workspaceId: req.workspaceId,
+      email: normalizedEmail,
+    })
+    if (existing) {
+      return res.status(400).json({ message: 'A team member with this email already exists in this workspace.' })
+    }
+
+    const member = await TeamMember.create({
+      workspaceId: req.workspaceId,
+      name: name.trim(),
+      email: normalizedEmail,
+      role: assignedRole,
+      avatar: `https://images.unsplash.com/photo-${1500000000000 + (Math.floor(Math.random() * 900000000))}?auto=format&fit=crop&w=120&h=120&q=80`,
+      status: 'Active',
+      joinedAt: 'Just now',
+    })
+
+    // Also sync to workspace.members
+    await Workspace.findByIdAndUpdate(req.workspaceId, {
+      $push: {
+        members: {
+          name: member.name,
+          email: member.email,
+          role: member.role,
+          status: member.status,
+          joinedAt: member.joinedAt,
+        },
+      },
+    })
+
+    res.status(201).json({
+      member: {
+        id: member._id.toString(),
+        name: member.name,
+        email: member.email,
+        role: member.role,
+        avatar: member.avatar,
+        status: member.status,
+        joinedAt: member.joinedAt,
+      },
+    })
   } catch (err) {
-    res.status(500).json({ message: 'Error inviting team member' })
+    console.error('Error inviting team member:', err)
+    res.status(500).json({ message: 'Error inviting team member.' })
   }
 })
 
-// PATCH update role
-router.patch('/:id', async (req, res) => {
+// PATCH /api/teams/:id — Update role
+router.patch('/:id', requireRole(['Owner', 'Admin']), async (req, res) => {
   try {
     const { id } = req.params
     const { role } = req.body
 
-    try {
-      await TeamMember.findByIdAndUpdate(id, { role })
-    } catch (e) {}
+    if (!mongoose.Types.ObjectId.isValid(id)) {
+      return res.status(400).json({ message: 'Invalid member ID format.' })
+    }
 
-    memoryMembers = memoryMembers.map((m) => (m.id === id ? { ...m, role } : m))
-    res.json({ message: 'Role updated successfully' })
+    const allowedRoles = ['Owner', 'Admin', 'Member', 'Viewer']
+    if (!allowedRoles.includes(role)) {
+      return res.status(400).json({ message: `Role must be one of: ${allowedRoles.join(', ')}` })
+    }
+
+    const member = await TeamMember.findOne({ _id: id, workspaceId: req.workspaceId })
+    if (!member) {
+      return res.status(404).json({ message: 'Team member not found in this workspace.' })
+    }
+
+    // Protection: Non-owners cannot modify an Owner's role
+    if (member.role === 'Owner' && req.userRole !== 'Owner') {
+      return res.status(403).json({ message: 'Only workspace owners can modify owner privileges.' })
+    }
+
+    // Protection: Only current Owner can promote someone to Owner
+    if (role === 'Owner' && req.userRole !== 'Owner') {
+      return res.status(403).json({ message: 'Only workspace owners can promote members to Owner.' })
+    }
+
+    member.role = role
+    await member.save()
+
+    // Sync in workspace.members array
+    await Workspace.updateOne(
+      { _id: req.workspaceId, 'members.email': member.email },
+      { $set: { 'members.$.role': role } }
+    )
+
+    res.json({
+      message: 'Role updated successfully',
+      member: {
+        id: member._id.toString(),
+        name: member.name,
+        email: member.email,
+        role: member.role,
+        avatar: member.avatar,
+        status: member.status,
+        joinedAt: member.joinedAt,
+      },
+    })
   } catch (err) {
-    res.status(500).json({ message: 'Error updating member role' })
+    console.error('Error updating member role:', err)
+    res.status(500).json({ message: 'Error updating member role.' })
   }
 })
 
-// DELETE remove member
-router.delete('/:id', async (req, res) => {
+// DELETE /api/teams/:id — Remove member
+router.delete('/:id', requireRole(['Owner', 'Admin']), async (req, res) => {
   try {
     const { id } = req.params
-    try {
-      await TeamMember.findByIdAndDelete(id)
-    } catch (e) {}
+    if (!mongoose.Types.ObjectId.isValid(id)) {
+      return res.status(400).json({ message: 'Invalid member ID format.' })
+    }
 
-    memoryMembers = memoryMembers.filter((m) => m.id !== id)
-    res.json({ message: 'Member removed from team' })
+    const member = await TeamMember.findOne({ _id: id, workspaceId: req.workspaceId })
+    if (!member) {
+      return res.status(404).json({ message: 'Team member not found in this workspace.' })
+    }
+
+    // Protection: Cannot remove workspace Owner
+    if (member.role === 'Owner') {
+      return res.status(400).json({
+        message: 'Cannot remove workspace owner. Transfer workspace ownership before removing this user.',
+      })
+    }
+
+    await TeamMember.findByIdAndDelete(id)
+
+    // Remove from workspace.members array
+    await Workspace.findByIdAndUpdate(req.workspaceId, {
+      $pull: { members: { email: member.email } },
+    })
+
+    res.json({ message: 'Team member removed successfully' })
   } catch (err) {
-    res.status(500).json({ message: 'Error removing team member' })
+    console.error('Error removing team member:', err)
+    res.status(500).json({ message: 'Error removing team member.' })
   }
 })
 

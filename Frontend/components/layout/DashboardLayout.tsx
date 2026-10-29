@@ -39,7 +39,7 @@ const navItems = [
 export function DashboardLayout({ children }: { children: React.ReactNode }) {
   const pathname = usePathname()
   const router = useRouter()
-  const { user, logout } = useAuth()
+  const { user, isLoading, logout } = useAuth()
   const { notifications, unreadCount, markNotificationRead } = useData()
 
   const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false)
@@ -47,9 +47,26 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
   const [notifOpen, setNotifOpen] = useState(false)
   const [searchQuery, setSearchQuery] = useState('')
 
+  React.useEffect(() => {
+    if (!isLoading && !user) {
+      router.push('/login')
+    }
+  }, [user, isLoading, router])
+
   const handleLogout = () => {
     logout()
     router.push('/login')
+  }
+
+  if (isLoading || !user) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-slate-50">
+        <div className="flex flex-col items-center gap-3">
+          <div className="w-8 h-8 border-2 border-blue-600 border-t-transparent rounded-full animate-spin" />
+          <p className="text-xs font-medium text-slate-500">Loading your workspace...</p>
+        </div>
+      </div>
+    )
   }
 
   return (
@@ -146,30 +163,36 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
               </button>
 
               {notifOpen && (
-                <div className="dash-dropdown notif-dropdown">
-                  <div className="dash-dropdown-header">
-                    <strong>Notifications</strong>
-                    <span className="text-xs text-blue-600 font-medium">
-                      {unreadCount} unread
-                    </span>
-                  </div>
-                  <div className="dash-dropdown-list">
-                    {notifications.map((n) => (
-                      <div
-                        key={n.id}
-                        className={`dash-notif-item ${!n.read ? 'unread' : ''}`}
-                        onClick={() => markNotificationRead(n.id)}
-                      >
-                        <div className="flex-1">
-                          <p className="dash-notif-title">{n.title}</p>
-                          <p className="dash-notif-desc">{n.description}</p>
-                          <span className="dash-notif-time">{n.time}</span>
+                <>
+                  <div
+                    className="fixed inset-0 z-20 cursor-default"
+                    onClick={() => setNotifOpen(false)}
+                  />
+                  <div className="dash-dropdown notif-dropdown z-30">
+                    <div className="dash-dropdown-header">
+                      <strong>Notifications</strong>
+                      <span className="text-xs text-blue-600 font-medium">
+                        {unreadCount} unread
+                      </span>
+                    </div>
+                    <div className="dash-dropdown-list">
+                      {notifications.map((n) => (
+                        <div
+                          key={n.id}
+                          className={`dash-notif-item ${!n.read ? 'unread' : ''}`}
+                          onClick={() => markNotificationRead(n.id)}
+                        >
+                          <div className="flex-1">
+                            <p className="dash-notif-title">{n.title}</p>
+                            <p className="dash-notif-desc">{n.description}</p>
+                            <span className="dash-notif-time">{n.time}</span>
+                          </div>
+                          {!n.read && <span className="unread-dot" />}
                         </div>
-                        {!n.read && <span className="unread-dot" />}
-                      </div>
-                    ))}
+                      ))}
+                    </div>
                   </div>
-                </div>
+                </>
               )}
             </div>
 
@@ -197,44 +220,50 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
               </button>
 
               {profileOpen && (
-                <div className="dash-dropdown user-dropdown">
-                  <div className="dash-dropdown-user-card">
-                    <div className="dash-avatar-lg">
-                      {user?.avatar ? (
-                        <img src={user.avatar} alt={user.name} />
-                      ) : (
-                        <span>{user?.name ? user.name[0] : 'A'}</span>
-                      )}
+                <>
+                  <div
+                    className="fixed inset-0 z-20 cursor-default"
+                    onClick={() => setProfileOpen(false)}
+                  />
+                  <div className="dash-dropdown user-dropdown z-30">
+                    <div className="dash-dropdown-user-card">
+                      <div className="dash-avatar-lg">
+                        {user?.avatar ? (
+                          <img src={user.avatar} alt={user.name} />
+                        ) : (
+                          <span>{user?.name ? user.name[0] : 'A'}</span>
+                        )}
+                      </div>
+                      <div>
+                        <strong className="block text-sm text-gray-900">{user?.name || 'Alex Carter'}</strong>
+                        <span className="block text-xs text-gray-500">{user?.email || 'alex@example.com'}</span>
+                      </div>
                     </div>
-                    <div>
-                      <strong className="block text-sm text-gray-900">{user?.name || 'Alex Carter'}</strong>
-                      <span className="block text-xs text-gray-500">{user?.email || 'alex@example.com'}</span>
-                    </div>
-                  </div>
 
-                  <div className="dash-dropdown-menu">
-                    <Link
-                      href="/settings"
-                      className="dash-dropdown-link"
-                      onClick={() => setProfileOpen(false)}
-                    >
-                      <Settings size={14} /> Account Settings
-                    </Link>
-                    <Link
-                      href="/"
-                      className="dash-dropdown-link"
-                      onClick={() => setProfileOpen(false)}
-                    >
-                      <ExternalLink size={14} /> View Marketing Site
-                    </Link>
-                    <button
-                      onClick={handleLogout}
-                      className="dash-dropdown-link text-red-600 hover:bg-red-50 w-full text-left"
-                    >
-                      <LogOut size={14} /> Log Out
-                    </button>
+                    <div className="dash-dropdown-menu">
+                      <Link
+                        href="/settings"
+                        className="dash-dropdown-link"
+                        onClick={() => setProfileOpen(false)}
+                      >
+                        <Settings size={14} /> Account Settings
+                      </Link>
+                      <Link
+                        href="/"
+                        className="dash-dropdown-link"
+                        onClick={() => setProfileOpen(false)}
+                      >
+                        <ExternalLink size={14} /> View Marketing Site
+                      </Link>
+                      <button
+                        onClick={handleLogout}
+                        className="dash-dropdown-link text-red-600 hover:bg-red-50 w-full text-left cursor-pointer"
+                      >
+                        <LogOut size={14} /> Log Out
+                      </button>
+                    </div>
                   </div>
-                </div>
+                </>
               )}
             </div>
           </div>

@@ -1,203 +1,163 @@
 const express = require('express')
 const router = express.Router()
+const mongoose = require('mongoose')
+const {
+  authenticateToken,
+  requireWorkspace,
+  requireRole,
+} = require('../middleware/auth')
 const Project = require('../models/Project')
 
-// In-memory initial projects store
-let memoryProjects = [
-  {
-    id: 'proj_1',
-    name: 'Website Redesign',
-    description: 'Modernizing corporate marketing website with high conversion design system.',
-    team: [
-      { id: '1', name: 'Alex Carter' },
-      { id: '2', name: 'Sarah Khan' },
-      { id: '3', name: 'Mike Johnson' },
-    ],
-    progress: 80,
-    status: 'In Progress',
-    dueDate: 'Apr 25, 2024',
-    budget: '$18,500',
-    category: 'Design & Web',
-  },
-  {
-    id: 'proj_2',
-    name: 'Mobile App',
-    description: 'iOS and Android client application for on-the-go workspace analytics.',
-    team: [
-      { id: '1', name: 'Alex Carter' },
-      { id: '4', name: 'Emily Davis' },
-    ],
-    progress: 60,
-    status: 'In Progress',
-    dueDate: 'May 10, 2024',
-    budget: '$34,000',
-    category: 'Mobile Dev',
-  },
-  {
-    id: 'proj_3',
-    name: 'Marketing Campaign',
-    description: 'Q2 product launch campaigns across LinkedIn, Twitter, and paid search.',
-    team: [
-      { id: '2', name: 'Sarah Khan' },
-      { id: '5', name: 'David Wilson' },
-    ],
-    progress: 100,
-    status: 'Completed',
-    dueDate: 'Apr 12, 2024',
-    budget: '$12,000',
-    category: 'Marketing',
-  },
-  {
-    id: 'proj_4',
-    name: 'Dashboard Analytics',
-    description: 'Real-time telemetry and reporting engine for enterprise customers.',
-    team: [
-      { id: '3', name: 'Mike Johnson' },
-      { id: '4', name: 'Emily Davis' },
-    ],
-    progress: 40,
-    status: 'In Progress',
-    dueDate: 'May 20, 2024',
-    budget: '$22,500',
-    category: 'Engineering',
-  },
-  {
-    id: 'proj_5',
-    name: 'API Integration',
-    description: 'Stripe, Slack, and Webhook bi-directional automation connectors.',
-    team: [
-      { id: '1', name: 'Alex Carter' },
-      { id: '5', name: 'David Wilson' },
-    ],
-    progress: 20,
-    status: 'Not Started',
-    dueDate: 'Jun 5, 2024',
-    budget: '$15,000',
-    category: 'Backend',
-  },
-]
+// Apply authentication and workspace isolation to all project endpoints
+router.use(authenticateToken)
+router.use(requireWorkspace)
 
-// GET all projects
+// GET /api/projects — List projects for current workspace
 router.get('/', async (req, res) => {
   try {
-    try {
-      const dbProjects = await Project.find().sort({ createdAt: -1 })
-      if (dbProjects && dbProjects.length > 0) {
-        return res.json({
-          projects: dbProjects.map((p) => ({
-            id: p._id.toString(),
-            name: p.name,
-            description: p.description,
-            team: p.team,
-            progress: p.progress,
-            status: p.status,
-            dueDate: p.dueDate,
-            budget: p.budget,
-          })),
-        })
-      }
-    } catch (e) {}
+    const dbProjects = await Project.find({ workspaceId: req.workspaceId }).sort({
+      createdAt: -1,
+    })
 
-    res.json({ projects: memoryProjects })
+    const projects = dbProjects.map((p) => ({
+      id: p._id.toString(),
+      name: p.name,
+      description: p.description,
+      team: p.team,
+      progress: p.progress,
+      status: p.status,
+      dueDate: p.dueDate,
+      budget: p.budget,
+      category: p.category,
+      createdAt: p.createdAt,
+    }))
+
+    res.json({ projects })
   } catch (err) {
-    res.status(500).json({ message: 'Error retrieving projects' })
+    console.error('Error fetching projects:', err)
+    res.status(500).json({ message: 'Error retrieving projects.' })
   }
 })
 
-// POST create project
-router.post('/', async (req, res) => {
+// POST /api/projects — Create project in current workspace
+router.post('/', requireRole(['Owner', 'Admin', 'Member']), async (req, res) => {
   try {
-    const { name, description, progress, status, dueDate, budget, team } = req.body
-    if (!name) {
-      return res.status(400).json({ message: 'Project name is required' })
+    const { name, description, progress, status, dueDate, budget, category, team } = req.body
+
+    if (!name || typeof name !== 'string' || !name.trim()) {
+      return res.status(400).json({ message: 'Project name is required.' })
     }
 
-    let createdProject = null
-    try {
-      const p = await Project.create({
-        name,
-        description: description || '',
-        progress: progress || 0,
-        status: status || 'In Progress',
-        dueDate: dueDate || 'May 30, 2024',
-        budget: budget || '$10,000',
-        team: team || [{ id: '1', name: 'Alex Carter' }],
-      })
-      createdProject = {
-        id: p._id.toString(),
-        name: p.name,
-        description: p.description,
-        progress: p.progress,
-        status: p.status,
-        dueDate: p.dueDate,
-        budget: p.budget,
-        team: p.team,
-      }
-    } catch (e) {
-      createdProject = {
-        id: `proj_${Date.now()}`,
-        name,
-        description: description || '',
-        progress: Number(progress) || 0,
-        status: status || 'In Progress',
-        dueDate: dueDate || 'May 30, 2024',
-        budget: budget || '$10,000',
-        team: team || [{ id: '1', name: 'Alex Carter' }],
-      }
-      memoryProjects.unshift(createdProject)
+    const sanitizedProgress = Math.max(0, Math.min(100, Number(progress) || 0))
+    const allowedStatuses = ['In Progress', 'Completed', 'Not Started', 'Archived']
+    const sanitizedStatus = allowedStatuses.includes(status) ? status : 'In Progress'
+
+    const project = await Project.create({
+      workspaceId: req.workspaceId,
+      userId: req.user.id,
+      name: name.trim(),
+      description: typeof description === 'string' ? description.trim() : '',
+      progress: sanitizedProgress,
+      status: sanitizedStatus,
+      dueDate: dueDate || 'May 30, 2024',
+      budget: budget || '$10,000',
+      category: category || 'General',
+      team: Array.isArray(team) && team.length > 0 ? team : [{ id: '1', name: req.user.email.split('@')[0] }],
+    })
+
+    res.status(201).json({
+      project: {
+        id: project._id.toString(),
+        name: project.name,
+        description: project.description,
+        progress: project.progress,
+        status: project.status,
+        dueDate: project.dueDate,
+        budget: project.budget,
+        category: project.category,
+        team: project.team,
+        createdAt: project.createdAt,
+      },
+    })
+  } catch (err) {
+    console.error('Error creating project:', err)
+    res.status(500).json({ message: 'Error creating project.' })
+  }
+})
+
+// PUT /api/projects/:id — Update project
+router.put('/:id', requireRole(['Owner', 'Admin', 'Member']), async (req, res) => {
+  try {
+    const { id } = req.params
+    if (!mongoose.Types.ObjectId.isValid(id)) {
+      return res.status(400).json({ message: 'Invalid project ID format.' })
     }
 
-    res.status(201).json({ project: createdProject })
-  } catch (err) {
-    res.status(500).json({ message: 'Error creating project' })
-  }
-})
+    const project = await Project.findOne({ _id: id, workspaceId: req.workspaceId })
+    if (!project) {
+      return res.status(404).json({ message: 'Project not found in this workspace.' })
+    }
 
-// PUT update project
-router.put('/:id', async (req, res) => {
-  try {
-    const { id } = req.params
-    const updates = req.body
+    const { name, description, progress, status, dueDate, budget, category, team } = req.body
 
-    try {
-      const updated = await Project.findByIdAndUpdate(id, updates, { new: true })
-      if (updated) {
-        return res.json({
-          project: {
-            id: updated._id.toString(),
-            name: updated.name,
-            description: updated.description,
-            progress: updated.progress,
-            status: updated.status,
-            dueDate: updated.dueDate,
-            budget: updated.budget,
-            team: updated.team,
-          },
-        })
+    if (name !== undefined) {
+      if (!name || typeof name !== 'string' || !name.trim()) {
+        return res.status(400).json({ message: 'Project name cannot be empty.' })
       }
-    } catch (e) {}
+      project.name = name.trim()
+    }
+    if (description !== undefined) project.description = String(description).trim()
+    if (progress !== undefined) {
+      project.progress = Math.max(0, Math.min(100, Number(progress) || 0))
+    }
+    if (status !== undefined) {
+      const allowed = ['In Progress', 'Completed', 'Not Started', 'Archived']
+      if (allowed.includes(status)) project.status = status
+    }
+    if (dueDate !== undefined) project.dueDate = String(dueDate)
+    if (budget !== undefined) project.budget = String(budget)
+    if (category !== undefined) project.category = String(category)
+    if (Array.isArray(team)) project.team = team
 
-    // Memory update
-    memoryProjects = memoryProjects.map((p) => (p.id === id ? { ...p, ...updates } : p))
-    const proj = memoryProjects.find((p) => p.id === id)
-    res.json({ project: proj })
+    await project.save()
+
+    res.json({
+      project: {
+        id: project._id.toString(),
+        name: project.name,
+        description: project.description,
+        progress: project.progress,
+        status: project.status,
+        dueDate: project.dueDate,
+        budget: project.budget,
+        category: project.category,
+        team: project.team,
+        createdAt: project.createdAt,
+      },
+    })
   } catch (err) {
-    res.status(500).json({ message: 'Error updating project' })
+    console.error('Error updating project:', err)
+    res.status(500).json({ message: 'Error updating project.' })
   }
 })
 
-// DELETE project
-router.delete('/:id', async (req, res) => {
+// DELETE /api/projects/:id — Delete project
+router.delete('/:id', requireRole(['Owner', 'Admin']), async (req, res) => {
   try {
     const { id } = req.params
-    try {
-      await Project.findByIdAndDelete(id)
-    } catch (e) {}
+    if (!mongoose.Types.ObjectId.isValid(id)) {
+      return res.status(400).json({ message: 'Invalid project ID format.' })
+    }
 
-    memoryProjects = memoryProjects.filter((p) => p.id !== id)
+    const result = await Project.findOneAndDelete({ _id: id, workspaceId: req.workspaceId })
+    if (!result) {
+      return res.status(404).json({ message: 'Project not found in this workspace.' })
+    }
+
     res.json({ message: 'Project deleted successfully' })
   } catch (err) {
-    res.status(500).json({ message: 'Error deleting project' })
+    console.error('Error deleting project:', err)
+    res.status(500).json({ message: 'Error deleting project.' })
   }
 })
 

@@ -28,25 +28,53 @@ export function Navbar() {
   const [activeDropdown, setActiveDropdown] = useState<string | null>(null)
   const { user } = useAuth()
   const navRef = useRef<HTMLDivElement>(null)
+  const timeoutRef = useRef<NodeJS.Timeout | null>(null)
+
+  const handleMouseEnter = (name: string) => {
+    if (typeof window !== 'undefined' && window.innerWidth > 768) {
+      if (timeoutRef.current) {
+        clearTimeout(timeoutRef.current)
+        timeoutRef.current = null
+      }
+      setActiveDropdown(name)
+    }
+  }
+
+  const handleMouseLeave = () => {
+    if (typeof window !== 'undefined' && window.innerWidth > 768) {
+      if (timeoutRef.current) {
+        clearTimeout(timeoutRef.current)
+      }
+      timeoutRef.current = setTimeout(() => {
+        setActiveDropdown(null)
+      }, 220)
+    }
+  }
 
   // Close dropdown on outside click
   useEffect(() => {
     function handleClickOutside(event: MouseEvent) {
       if (navRef.current && !navRef.current.contains(event.target as Node)) {
+        if (timeoutRef.current) clearTimeout(timeoutRef.current)
         setActiveDropdown(null)
       }
     }
     document.addEventListener('mousedown', handleClickOutside)
-    return () => document.removeEventListener('mousedown', handleClickOutside)
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside)
+      if (timeoutRef.current) clearTimeout(timeoutRef.current)
+    }
   }, [])
 
   const handleDropdownToggle = (name: string, e: React.MouseEvent) => {
     e.preventDefault()
     e.stopPropagation()
+    if (timeoutRef.current) clearTimeout(timeoutRef.current)
     setActiveDropdown((prev) => (prev === name ? null : name))
   }
 
   const closeAll = () => {
+    if (timeoutRef.current) clearTimeout(timeoutRef.current)
     setActiveDropdown(null)
     setMobileOpen(false)
   }
@@ -65,8 +93,8 @@ export function Navbar() {
           {/* 1. Product Dropdown */}
           <div
             className="nav-item-dropdown relative"
-            onMouseEnter={() => window.innerWidth > 768 && setActiveDropdown('product')}
-            onMouseLeave={() => window.innerWidth > 768 && setActiveDropdown(null)}
+            onMouseEnter={() => handleMouseEnter('product')}
+            onMouseLeave={handleMouseLeave}
           >
             <button
               type="button"
@@ -85,7 +113,11 @@ export function Navbar() {
             </button>
 
             {activeDropdown === 'product' && (
-              <div className="nav-dropdown-menu product-menu animate-in fade-in slide-in-from-top-1 duration-150">
+              <div
+                className="nav-dropdown-menu product-menu animate-in fade-in slide-in-from-top-1 duration-150"
+                onMouseEnter={() => handleMouseEnter('product')}
+                onMouseLeave={handleMouseLeave}
+              >
                 <div className="p-3 grid grid-cols-1 md:grid-cols-2 gap-2 w-72 md:w-[420px]">
                   <Link
                     href="/dashboard"
@@ -176,8 +208,8 @@ export function Navbar() {
           {/* 2. Solutions Dropdown */}
           <div
             className="nav-item-dropdown relative"
-            onMouseEnter={() => window.innerWidth > 768 && setActiveDropdown('solutions')}
-            onMouseLeave={() => window.innerWidth > 768 && setActiveDropdown(null)}
+            onMouseEnter={() => handleMouseEnter('solutions')}
+            onMouseLeave={handleMouseLeave}
           >
             <button
               type="button"
@@ -196,7 +228,11 @@ export function Navbar() {
             </button>
 
             {activeDropdown === 'solutions' && (
-              <div className="nav-dropdown-menu solutions-menu animate-in fade-in slide-in-from-top-1 duration-150">
+              <div
+                className="nav-dropdown-menu solutions-menu animate-in fade-in slide-in-from-top-1 duration-150"
+                onMouseEnter={() => handleMouseEnter('solutions')}
+                onMouseLeave={handleMouseLeave}
+              >
                 <div className="p-3 space-y-1 w-64 md:w-72">
                   <Link
                     href="/#solutions"
@@ -262,8 +298,8 @@ export function Navbar() {
           {/* 4. Resources Dropdown */}
           <div
             className="nav-item-dropdown relative"
-            onMouseEnter={() => window.innerWidth > 768 && setActiveDropdown('resources')}
-            onMouseLeave={() => window.innerWidth > 768 && setActiveDropdown(null)}
+            onMouseEnter={() => handleMouseEnter('resources')}
+            onMouseLeave={handleMouseLeave}
           >
             <button
               type="button"
@@ -282,7 +318,11 @@ export function Navbar() {
             </button>
 
             {activeDropdown === 'resources' && (
-              <div className="nav-dropdown-menu resources-menu animate-in fade-in slide-in-from-top-1 duration-150">
+              <div
+                className="nav-dropdown-menu resources-menu animate-in fade-in slide-in-from-top-1 duration-150"
+                onMouseEnter={() => handleMouseEnter('resources')}
+                onMouseLeave={handleMouseLeave}
+              >
                 <div className="p-3 space-y-1 w-64 md:w-72">
                   <Link
                     href="/team"

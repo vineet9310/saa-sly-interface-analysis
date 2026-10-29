@@ -172,7 +172,7 @@ export default function Page() {
               ['Pro', '$29', 'Most popular for growing teams', ['Unlimited projects', 'Advanced analytics', 'Up to 10 team members', 'Priority support', 'Custom integrations'], 'Start Free Trial', '/signup?plan=pro'],
               ['Business', '$79', 'For large organizations', ['Everything in Pro', 'Unlimited team members', 'Advanced security', 'Dedicated support', 'Custom onboarding'], 'Contact Sales', '/signup?plan=business'],
             ].map(([name, price, desc, features, cta, href], i) => (
-              <article className={`price-card ${i === 1 ? 'popular' : ''}`} key={name}>
+              <article className={`price-card ${i === 1 ? 'popular' : ''}`} key={name as string}>
                 {i === 1 && <div className="popular-label">Most Popular</div>}
                 <h3>{name}</h3>
                 <p>{desc}</p>

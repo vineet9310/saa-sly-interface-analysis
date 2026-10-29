@@ -18,22 +18,36 @@ import { useAuth } from '@/context/AuthContext'
 type SettingsTab = 'profile' | 'security' | 'notifications' | 'billing' | 'integrations'
 
 export default function SettingsPage() {
-  const { user, updateProfile } = useAuth()
+  const { user, updateProfile, changePassword } = useAuth()
 
   const [activeTab, setActiveTab] = useState<SettingsTab>('profile')
 
   // Profile form state
-  const [name, setName] = useState(user?.name || 'Alex Carter')
-  const [email, setEmail] = useState(user?.email || 'alex@example.com')
-  const [bio, setBio] = useState(user?.bio || 'Product designer and developer.')
-  const [company, setCompany] = useState(user?.company || 'SaaSly Inc.')
+  const [name, setName] = useState(user?.name || '')
+  const [email, setEmail] = useState(user?.email || '')
+  const [bio, setBio] = useState(user?.bio || '')
+  const [company, setCompany] = useState(user?.company || '')
   const [savedSuccess, setSavedSuccess] = useState(false)
+  const [profileError, setProfileError] = useState('')
+  const [profileSaving, setProfileSaving] = useState(false)
+
+  // Sync with user once loaded
+  React.useEffect(() => {
+    if (user) {
+      setName(user.name || '')
+      setEmail(user.email || '')
+      setBio(user.bio || '')
+      setCompany(user.company || '')
+    }
+  }, [user])
 
   // Security form state
   const [currentPassword, setCurrentPassword] = useState('')
   const [newPassword, setNewPassword] = useState('')
   const [twoFactorEnabled, setTwoFactorEnabled] = useState(true)
   const [securitySuccess, setSecuritySuccess] = useState(false)
+  const [securityError, setSecurityError] = useState('')
+  const [securitySaving, setSecuritySaving] = useState(false)
 
   // Notifications state
   const [notifEmailProjects, setNotifEmailProjects] = useState(true)
@@ -49,19 +63,45 @@ export default function SettingsPage() {
     { id: 'stripe', name: 'Stripe', desc: 'Subscription and invoice webhook processing', connected: true },
   ])
 
-  const handleProfileSubmit = (e: React.FormEvent) => {
+  const handleProfileSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
-    updateProfile({ name, email, bio, company })
-    setSavedSuccess(true)
-    setTimeout(() => setSavedSuccess(false), 3000)
+    setProfileSaving(true)
+    setProfileError('')
+    try {
+      await updateProfile({ name, bio, company })
+      setSavedSuccess(true)
+      setTimeout(() => setSavedSuccess(false), 3000)
+    } catch (err: any) {
+      setProfileError(err?.message || 'Failed to update profile.')
+    } finally {
+      setProfileSaving(false)
+    }
   }
 
-  const handleSecuritySubmit = (e: React.FormEvent) => {
+  const handleSecuritySubmit = async (e: React.FormEvent) => {
     e.preventDefault()
-    setSecuritySuccess(true)
-    setCurrentPassword('')
-    setNewPassword('')
-    setTimeout(() => setSecuritySuccess(false), 3000)
+    if (!currentPassword || !newPassword) {
+      setSecurityError('Please enter both current and new password.')
+      return
+    }
+    if (newPassword.length < 6) {
+      setSecurityError('New password must be at least 6 characters long.')
+      return
+    }
+
+    setSecuritySaving(true)
+    setSecurityError('')
+    try {
+      await changePassword(currentPassword, newPassword)
+      setSecuritySuccess(true)
+      setCurrentPassword('')
+      setNewPassword('')
+      setTimeout(() => setSecuritySuccess(false), 3000)
+    } catch (err: any) {
+      setSecurityError(err?.message || 'Failed to update password. Please check your current password.')
+    } finally {
+      setSecuritySaving(false)
+    }
   }
 
   const toggleIntegration = (id: string) => {
@@ -117,6 +157,12 @@ export default function SettingsPage() {
           {savedSuccess && (
             <div className="mb-4 p-3 bg-emerald-50 text-emerald-700 text-xs rounded-lg flex items-center gap-2">
               <Check size={14} /> Profile updated successfully!
+            </div>
+          )}
+
+          {profileError && (
+            <div className="mb-4 p-3 bg-red-50 text-red-600 text-xs rounded-lg">
+              {profileError}
             </div>
           )}
 
@@ -226,6 +272,12 @@ export default function SettingsPage() {
             {securitySuccess && (
               <div className="mb-4 p-3 bg-emerald-50 text-emerald-700 text-xs rounded-lg flex items-center gap-2">
                 <Check size={14} /> Password updated successfully!
+              </div>
+            )}
+
+            {securityError && (
+              <div className="mb-4 p-3 bg-red-50 text-red-600 text-xs rounded-lg">
+                {securityError}
               </div>
             )}
 
